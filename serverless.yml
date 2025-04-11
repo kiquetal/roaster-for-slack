@@ -1,0 +1,83 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: cresterida
+# "service" is the name of this project. This will also be added to your AWS resource names.
+service: roaster-for-slack
+
+stages:
+  test:
+    DYNAMODB_TABLE_USERS: ${self:service}-${opt:stage}-users
+
+package:
+  individually: true
+custom:
+  pythonRequirements:
+    layer: true
+provider:
+  name: aws
+  runtime: python3.10
+  stage: ${opt:stage, 'test'}
+  profile: ${opt:aws-profile, 'default'}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource: !GetAtt ConversationContextTable.Arn
+        - Effect: Allow
+          Action:
+            - bedrock:InvokeModel
+          Resource: "*"
+
+functions:
+  hello-function:
+    handler: lambdas/bot.hello
+    name: ${self:service}-${opt:stage}-hello-from-slack
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+    environment:
+      SLACK_OAUTH_TOKEN: ${env:SLACK_OAUTH_TOKEN, ''}
+      DYNAMODB_TABLE: ${self:stages.${opt:stage}.DYNAMODB_TABLE_USERS}
+    events:
+      - httpApi:
+          path: /
+          method: post
+    package:
+      exclude:
+        - '**'
+      include:
+        - lambdas/bot.py
+        - response/wrapper.py
+
+resources:
+  Resources:
+    ConversationContextTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:stages.${opt:stage}.DYNAMODB_TABLE_USERS}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: user_id
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: user_id
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: SkIndex
+            KeySchema:
+              - AttributeName: sk
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+plugins:
+  - serverless-python-requirements
