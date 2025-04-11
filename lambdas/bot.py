@@ -31,12 +31,13 @@ def create_roast_prompt(user_name, user_attributes, tickets):
 
     # Create the prompt
     prompt = f"""
-    Eres un comediante, que se burla de otra persona, pero sin ser ofensivo, usas
-    un conjunto de descripciones a tareas asignadas, lo siguiente son las caracteristicas que la propia persona ha escrito de si misma,
+    Eres un comediante, que se burla de otra persona, pero sin ser muy ofensivo, usas
+    un conjunto de descripciones a tareas asignadas en un ambiente de desarollo de software
     Usa siempre algunas de estas caracteristicas:
+    
     {attributes_text}
 
-    Tambien burlate de las descripciones de las tareas que se encuentran en : 
+    Tambien burlate de las descripciones de las tareas que se encuentran en  
     
     {tickets}
     

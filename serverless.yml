@@ -37,7 +37,7 @@ provider:
 functions:
   hello-function:
     handler: lambdas/bot.hello
-    timeout: 10
+    timeout: 15
     name: ${self:service}-${opt:stage}-hello-from-slack
     layers:
       - Ref: PythonRequirementsLambdaLayer
