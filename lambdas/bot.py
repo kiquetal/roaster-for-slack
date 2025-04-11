@@ -34,15 +34,15 @@ def create_roast_prompt(user_name, user_attributes, tickets):
     Eres un comediante, que se burla de otra persona, pero sin ser muy ofensivo, usas
     un conjunto de descripciones a tareas asignadas en un ambiente de desarollo de software
     Usa siempre algunas de estas caracteristicas:
-    
+
     {attributes_text}
 
     Tambien burlate de las descripciones de las tareas que se encuentran en  
-    
+
     {tickets}
-    
+
     Trata de usar caracteristicas de los tickets
-    
+
    La burla debe ser humorosa, no tan agresiva,  no escribas mas de 150 palabras
    Agrega un emoji al final
     """
@@ -202,9 +202,27 @@ def hello(event, context):
                 if 'Item' in response:
                     user_attributes = response['Item'].get('attributes', {})
 
-                tickets = obtainTicketsForUsersId(user_id)
+                tickets_list = obtainTicketsForUsersId(user_id)
+
+                # Format tickets for the prompt
+                tickets_text = ""
+                if tickets_list:
+                    for ticket in tickets_list:
+                        # Extract relevant ticket information
+                        ticket_id = ticket.get('sk', '').replace('#TICKET#', '')
+                        ticket_title = ticket.get('title', 'No title')
+                        ticket_description = ticket.get('description', 'No description')
+
+                        # Add formatted ticket to the text
+                        tickets_text += f"- Ticket {ticket_id}: {ticket_title}\n  {ticket_description}\n\n"
+                else:
+                    tickets_text = "- No tickets available\n"
+
+                # Store formatted tickets text
+                tickets = tickets_text
             except Exception as e:
                 print(f"Error fetching user attributes from DynamoDB: {e}")
+                tickets = "- No tickets available\n"
 
             # Update or create the user profile in DynamoDB
             try:
@@ -222,7 +240,10 @@ def hello(event, context):
         print(f"Error with DynamoDB operations: {e}")
 
     # Create a prompt for Bedrock
-    prompt = create_roast_prompt(user_name, user_attributes, tickets)
+    # Use slack_profile if available, otherwise use user_attributes from DynamoDB
+    attributes_to_use = slack_profile if slack_profile else user_attributes
+
+    prompt = create_roast_prompt(user_name, attributes_to_use, tickets)
 
     # Call Bedrock to generate a roast
     roast = generate_roast(prompt)
