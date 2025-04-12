@@ -109,6 +109,16 @@ To add new lambda functions:
 2. Update the `serverless.yml` file to include the new function
 3. Import and use the function in `handler.py`
 
+## Content Moderation
+
+The bot uses Amazon Bedrock's Claude model to generate roasts. Claude has built-in content moderation that may refuse to generate content it considers inappropriate or harmful. When this happens:
+
+1. The bot detects refusal messages from Claude by checking for common refusal phrases
+2. Instead of showing the raw refusal message to users, the bot provides a friendly message explaining that it can't generate the requested content
+3. The friendly message is in Spanish to match the language of the roasts: "Lo siento, no puedo generar una broma que pueda resultar ofensiva. ¿Qué tal si intentamos algo diferente? 😊"
+
+This ensures a better user experience even when content moderation is triggered.
+
 ## License
 
 [License information]

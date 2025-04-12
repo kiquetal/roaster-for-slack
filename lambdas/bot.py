@@ -31,20 +31,19 @@ def create_roast_prompt(user_name, user_attributes, tickets):
 
     # Create the prompt
     prompt = f"""
-    Eres un comediante, que se burla de otra persona, pero sin ser muy ofensivo, usas
+    Eres un comediante, que encuentra el lado divertido de  la otra persona, pero sin ser muy ofensivo, usas
     un conjunto de descripciones a tareas asignadas en un ambiente de desarollo de software
-    Usa siempre algunas de estas caracteristicas:
+    Usa de estas caracteristicas sin ser hiriente:
 
     {attributes_text}
 
-    Tambien burlate de las descripciones de las tareas que se encuentran en  
+    Haz broma ingeniosas de las descripciones de las tareas que se encuentran en:  
 
     {tickets}
 
-    Trata de usar caracteristicas de los tickets
 
-   La burla debe ser humorosa, no tan agresiva,  no escribas mas de 150 palabras
-   Agrega un emoji al final
+    No superes mas de 150 palabras, utiliza lenguaje tecnico y sarcastico
+    Agrega un emoji al final.
     """
 
     return prompt
@@ -57,7 +56,8 @@ def generate_roast(prompt):
         prompt (str): The prompt for Bedrock
 
     Returns:
-        str: The generated roast
+        str: The generated roast or None if an error occurred
+        bool: Flag indicating if the model refused to generate content
     """
     try:
         # Use Claude model for roast generation
@@ -70,7 +70,7 @@ def generate_roast(prompt):
         request_body = {
             "prompt": formatted_prompt,
             "max_tokens_to_sample": 300,
-            "temperature": 0.8,
+            "temperature": 0.7,
             "top_p": 0.9,
         }
 
@@ -83,11 +83,33 @@ def generate_roast(prompt):
         # Parse the response
         response_body = json.loads(response['body'].read())
         roast = response_body.get('completion', '')
+        roast = roast.strip()
 
-        return roast.strip()
+        # Check if the response contains refusal phrases commonly used by Claude
+        refusal_phrases = [
+            "me disculpo",
+            "no me siento cómodo",
+            "no puedo burlarme",
+            "no puedo generar",
+            "no puedo crear",
+            "no puedo proporcionar",
+            "no puedo cumplir",
+            "no es apropiado",
+            "va en contra de mis valores",
+            "no es ético"
+        ]
+
+        # Check if the response contains any refusal phrases
+        is_refusal = any(phrase in roast.lower() for phrase in refusal_phrases)
+
+        if is_refusal:
+            print(f"Claude refused to generate content: {roast}")
+            return None, True
+
+        return roast, False
     except Exception as e:
         print(f"Error generating roast with Bedrock: {e}")
-        return None
+        return None, False
 
 
 def obtainTicketsForUsersId(user_id):
@@ -246,13 +268,18 @@ def hello(event, context):
     prompt = create_roast_prompt(user_name, attributes_to_use, tickets)
 
     # Call Bedrock to generate a roast
-    roast = generate_roast(prompt)
-
+    roast, is_refusal = generate_roast(prompt)
 
     # Print the user attributes obtained from DynamoDB
     print(f"User attributes from DynamoDB: {json.dumps(user_attributes, indent=2)}")
 
-    message = roast if roast else "No pude crear una broma esta vez. Por favor, inténtalo de nuevo más tarde."
+    # Set appropriate message based on the result
+    if is_refusal:
+        message = "Lo siento, no puedo generar una broma que pueda resultar ofensiva. ¿Qué tal si intentamos algo diferente? 😊"
+    elif roast:
+        message = roast
+    else:
+        message = "No pude crear una broma esta vez. Por favor, inténtalo de nuevo más tarde."
     # Reply to the Slack channel
     if 'body' in event and user_id:
         try:
