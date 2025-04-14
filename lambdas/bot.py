@@ -127,15 +127,33 @@ def obtainTicketsForUsersId(user_id):
     table_name = os.environ.get('DYNAMODB_TABLE', 'roaster-for-slack-conversation-context')
     table = dynamodb.Table(table_name)
 
-    # Query the DynamoDB table for tickets
-    response = table.query(
-        KeyConditionExpression=boto3.dynamodb.conditions.Key('user_id').eq(user_id)
-        & boto3.dynamodb.conditions.Key('sk').begins_with('#TICKET#')
+    # Initialize variables for pagination
+    tickets = []
+    last_evaluated_key = None
 
-    )
+    # Query the DynamoDB table for tickets with pagination
+    while True:
+        # Prepare query parameters
+        query_params = {
+            'KeyConditionExpression': boto3.dynamodb.conditions.Key('user_id').eq(user_id)
+            & boto3.dynamodb.conditions.Key('sk').begins_with('#TICKET#')
+        }
 
-    # Extract tickets from the response
-    tickets = response.get('Items', [])
+        # Add ExclusiveStartKey if we're paginating
+        if last_evaluated_key:
+            query_params['ExclusiveStartKey'] = last_evaluated_key
+
+        # Execute the query
+        response = table.query(**query_params)
+
+        # Add the items to our tickets list
+        tickets.extend(response.get('Items', []))
+
+        # Check if there are more items to retrieve
+        last_evaluated_key = response.get('LastEvaluatedKey')
+        if not last_evaluated_key:
+            break
+
     return tickets
 
 
@@ -202,6 +220,9 @@ def hello(event, context):
 
     # Get user attributes from DynamoDB
     user_attributes = {}
+    # Initialize tickets variable
+    tickets = "- No tickets available\n"
+
     try:
         # Get the DynamoDB table name from environment or construct it
         table_name = os.environ.get('DYNAMODB_TABLE', 'roaster-for-slack-conversation-context')
@@ -224,6 +245,7 @@ def hello(event, context):
                 if 'Item' in response:
                     user_attributes = response['Item'].get('attributes', {})
 
+                # Get tickets from DynamoDB
                 tickets_list = obtainTicketsForUsersId(user_id)
 
                 # Format tickets for the prompt
@@ -233,18 +255,14 @@ def hello(event, context):
                         # Extract relevant ticket information
                         ticket_id = ticket.get('sk', '').replace('#TICKET#', '')
                         ticket_title = ticket.get('title', 'No title')
-                        ticket_description = ticket.get('description', 'No description')
-
+                        ticket_comments = ticket.get('comments', '')
                         # Add formatted ticket to the text
-                        tickets_text += f"- Ticket {ticket_id}: {ticket_title}\n  {ticket_description}\n\n"
-                else:
-                    tickets_text = "- No tickets available\n"
+                        tickets_text += f"- Ticket {ticket_id}: {ticket_title}\n  {ticket_comments}\n\n"
 
-                # Store formatted tickets text
-                tickets = tickets_text
+                    # Store formatted tickets text only if we have tickets
+                    tickets = tickets_text
             except Exception as e:
                 print(f"Error fetching user attributes from DynamoDB: {e}")
-                tickets = "- No tickets available\n"
 
             # Update or create the user profile in DynamoDB
             try:
