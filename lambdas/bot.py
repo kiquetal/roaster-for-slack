@@ -31,9 +31,9 @@ def create_roast_prompt(user_name, user_attributes, tickets):
 
     # Create the prompt
     prompt = f"""
-    Eres un comediante, que encuentra el lado divertido de  la otra persona, pero sin ser muy ofensivo, usas
+    Eres un comediante, que encuentra el lado divertido de la otra persona, , usas
     un conjunto de descripciones a tareas asignadas en un ambiente de desarollo de software
-    Usa de estas caracteristicas sin ser hiriente:
+    Usa de estas caracteristicas para hablar de la persona:
 
     {attributes_text}
 
@@ -42,7 +42,7 @@ def create_roast_prompt(user_name, user_attributes, tickets):
     {tickets}
 
 
-    No superes mas de 150 palabras, utiliza lenguaje tecnico y sarcastico
+    No superes mas de 200 palabras, utiliza lenguaje tecnico y sarcastico
     Agrega un emoji al final.
     """
 
@@ -192,6 +192,8 @@ def hello(event, context):
 
     # If we have a user_id, try to get the user's real name using Slack API
     slack_profile = {}
+    sayori_id = ""
+
     if user_id:
         # Get OAuth token from environment variable
         slack_token = os.environ.get('SLACK_OAUTH_TOKEN')
@@ -199,6 +201,8 @@ def hello(event, context):
             try:
                 client = WebClient(token=slack_token)
                 user_info = client.users_info(user=user_id)
+                print("User info response:", user_info)
+                sayori_id = user_info["user"]["id"]
                 if user_info['ok']:
                     user_name = user_info['user']['real_name'] or user_info['user']['name']
 
@@ -246,7 +250,7 @@ def hello(event, context):
                     user_attributes = response['Item'].get('attributes', {})
 
                 # Get tickets from DynamoDB
-                tickets_list = obtainTicketsForUsersId(user_id)
+                tickets_list = obtainTicketsForUsersId(sayori_id)
 
                 # Format tickets for the prompt
                 tickets_text = ""
@@ -254,10 +258,10 @@ def hello(event, context):
                     for ticket in tickets_list:
                         # Extract relevant ticket information
                         ticket_id = ticket.get('sk', '').replace('#TICKET#', '')
-                        ticket_title = ticket.get('title', 'No title')
-                        ticket_comments = ticket.get('comments', '')
+
+                        ticket_comments = ticket.get('comments', 'No Comments')
                         # Add formatted ticket to the text
-                        tickets_text += f"- Ticket {ticket_id}: {ticket_title}\n  {ticket_comments}\n\n"
+                        tickets_text += f"- Ticket {ticket_id}:\n  {ticket_comments}\n\n"
 
                     # Store formatted tickets text only if we have tickets
                     tickets = tickets_text
@@ -284,7 +288,7 @@ def hello(event, context):
     attributes_to_use = slack_profile if slack_profile else user_attributes
 
     prompt = create_roast_prompt(user_name, attributes_to_use, tickets)
-
+    print(f"Generated prompt for Bedrock: {prompt}")
     # Call Bedrock to generate a roast
     roast, is_refusal = generate_roast(prompt)
 
