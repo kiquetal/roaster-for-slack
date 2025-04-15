@@ -112,15 +112,16 @@ def generate_roast(prompt):
         return None, False
 
 
-def obtainTicketsForUsersId(user_id):
+def obtainTicketsForUsersId(user_id, limit=10):
     """
-    Obtain tickets for a given user ID from DynamoDB.
+    Obtain tickets for a given user ID from DynamoDB with a limit.
 
     Args:
         user_id (str): The user's ID
+        limit (int, optional): Maximum number of tickets to retrieve. Defaults to 10.
 
     Returns:
-        list: List of tickets for the user
+        list: List of tickets for the user (up to the specified limit)
     """
     # Initialize DynamoDB client
     dynamodb = boto3.resource('dynamodb')
@@ -136,7 +137,8 @@ def obtainTicketsForUsersId(user_id):
         # Prepare query parameters
         query_params = {
             'KeyConditionExpression': boto3.dynamodb.conditions.Key('user_id').eq(user_id)
-            & boto3.dynamodb.conditions.Key('sk').begins_with('#TICKET#')
+            & boto3.dynamodb.conditions.Key('sk').begins_with('#TICKET#'),
+            'Limit': limit  # Add limit to the query
         }
 
         # Add ExclusiveStartKey if we're paginating
@@ -149,10 +151,12 @@ def obtainTicketsForUsersId(user_id):
         # Add the items to our tickets list
         tickets.extend(response.get('Items', []))
 
-        # Check if there are more items to retrieve
-        last_evaluated_key = response.get('LastEvaluatedKey')
-        if not last_evaluated_key:
+        # Check if we've reached the limit or if there are no more items to retrieve
+        if len(tickets) >= limit or not response.get('LastEvaluatedKey'):
             break
+
+        # Update the last evaluated key for pagination
+        last_evaluated_key = response.get('LastEvaluatedKey')
 
     return tickets
 
@@ -161,6 +165,7 @@ def hello(event, context):
     # Extract user information from the event
     user_id = None
     user_name = "User"
+    channel_id = None
 
     # Parse the event body if it exists
     if event.get('body'):
@@ -177,6 +182,9 @@ def hello(event, context):
                 # Extract user_id from Slack event
                 if 'event' in body_json and 'user' in body_json['event']:
                     user_id = body_json['event']['user']
+                    # Extract channel_id from Slack event
+                    if 'channel' in body_json['event']:
+                        channel_id = body_json['event']['channel']
                 elif 'user_id' in body_json:
                     user_id = body_json['user_id']
             except json.JSONDecodeError:
@@ -187,6 +195,8 @@ def hello(event, context):
                     user_id = form_data['user_id']
                 if 'user_name' in form_data:
                     user_name = form_data['user_name']
+                if 'channel_id' in form_data:
+                    channel_id = form_data['channel_id']
         except (KeyError, Exception) as e:
             print(f"Error parsing event body: {e}")
 
@@ -249,8 +259,8 @@ def hello(event, context):
                 if 'Item' in response:
                     user_attributes = response['Item'].get('attributes', {})
 
-                # Get tickets from DynamoDB
-                tickets_list = obtainTicketsForUsersId(sayori_id)
+                # Get tickets from DynamoDB (limited to 10 for better performance)
+                tickets_list = obtainTicketsForUsersId(sayori_id, limit=10)
 
                 # Format tickets for the prompt
                 tickets_text = ""
@@ -296,32 +306,18 @@ def hello(event, context):
     print(f"User attributes from DynamoDB: {json.dumps(user_attributes, indent=2)}")
 
     # Set appropriate message based on the result
+    # Format the message to include the user's name and mention
+    user_mention = f"<@{user_id}>"
+
     if is_refusal:
-        message = "Lo siento, no puedo generar una broma que pueda resultar ofensiva. ¿Qué tal si intentamos algo diferente? 😊"
+        message = f"Hey {user_name} {user_mention}, Lo siento, no puedo generar una broma que pueda resultar ofensiva. ¿Qué tal si intentamos algo diferente? 😊"
     elif roast:
-        message = roast
+        message = f"Hey {user_name} {user_mention}, {roast}"
     else:
-        message = "No pude crear una broma esta vez. Por favor, inténtalo de nuevo más tarde."
+        message = f"Hey {user_name} {user_mention}, No pude crear una broma esta vez. Por favor, inténtalo de nuevo más tarde."
     # Reply to the Slack channel
-    if 'body' in event and user_id:
+    if user_id and channel_id:
         try:
-            # Parse the event body to get the channel ID
-            body = event['body']
-            if event.get('isBase64Encoded', False):
-                import base64
-                body = base64.b64decode(body).decode('utf-8')
-
-            channel_id = None
-            try:
-                body_json = json.loads(body)
-                if 'event' in body_json and 'channel' in body_json['event']:
-                    channel_id = body_json['event']['channel']
-            except json.JSONDecodeError:
-                import urllib.parse
-                form_data = dict(urllib.parse.parse_qsl(body))
-                if 'channel_id' in form_data:
-                    channel_id = form_data['channel_id']
-
             # Send message to the channel
             if channel_id and slack_token:
                 client = WebClient(token=slack_token)
