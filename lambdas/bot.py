@@ -168,12 +168,15 @@ def obtainTicketsForUsersId(user_id, limit=10):
 
     return tickets
 
-@app.command("/roast")
-def handle_message_events(ack, command, client):
-    print("Receiving command:", command)
-    ack()
-    user_id = command['user_id']  # Get user ID from command
-    channel_id = command['channel_id'] # Get channel ID from command
+def fast_handle_message_events(body,ack):
+    ack("Proccessing")
+
+
+def handle_message_events(respond,body,client):
+    print("Receiving command:", body)
+    print("after ack")
+    user_id = body['user_id']  # Get user ID from command
+    channel_id = body['channel_id'] # Get channel ID from command
     # text = event.get('text', '') # You likely don't need this for a command
     # Remove the if "roast me" block as the command itself is the trigger
 
@@ -296,6 +299,8 @@ def handle_message_events(ack, command, client):
     except Exception as e:
         print(f"Error sending message to Slack channel: {e}")
 # Lambda handler
+
+app.command("/roast")(ack=fast_handle_message_events,lazy=[handle_message_events])
 def lambda_handler(event, context):
     slack_handler = SlackRequestHandler(app=app)
     return slack_handler.handle(event, context)
