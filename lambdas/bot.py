@@ -77,7 +77,7 @@ def generate_roast(prompt):
         # Prepare the request body
         request_body = {
             "prompt": formatted_prompt,
-            "max_tokens_to_sample": 150,
+            "max_tokens_to_sample": 300,
             "temperature": 0.8,
             "top_p": 0.9,
         }
