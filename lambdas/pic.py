@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import os
@@ -41,41 +42,37 @@ def handle_message_events(respond,body,client):
         # 1. Construct the Bedrock Request Body
         bedrock_model_id = "stability.stable-diffusion-xl-v1" # Example model ID
         request_body = json.dumps({
-            "steps": 50,
-            "width": 512,
-            "height": 512,
+
             "text_prompts": [
                 {
                     "text": text,
                     "weight": 1.0 # Optional, but good practice
                 }
             ],
-            # Add other Stable Diffusion parameters as needed (e.g., cfg_scale, sampler)
         })
 
         # 2. Invoke the Bedrock Model
         response = bedrock_runtime.invoke_model(
             body=request_body,
             modelId=bedrock_model_id,
-            accept="image/png",
+            accept = "application/json",
             contentType="application/json"
         )
 
         # 3. Handle the Response and Send to Slack
-        response_body = response.get('body').read()
-        image_data = io.BytesIO(response_body)
-        image_bytes = image_data.getvalue() # Get the content as bytes
+        print("response from bedrock")
+        print(response)
+        response_body = json.loads(response.get("body").read())
+        print(response_body['result'])
 
+        base64_image = response_body.get("artifacts")[0].get("base64")
+        base64_bytes = base64_image.encode('ascii')
+        image_bytes = base64.b64decode(base64_bytes)
         client.files_upload_v2(
             channel=channel_id,
             initial_comment=f"Here's the image I generated for you!",
-            files=[
-                {
-                    "content": image_bytes, # Use the byte value directly
-                    "filename": "generated_image.png",
-                    "filetype": "png",
-                }
-            ]
+           file=io.BytesIO(image_bytes),
+
         )
         print(f"Image generated and sent to channel: {channel_id}")
 
