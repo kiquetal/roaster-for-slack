@@ -2,13 +2,21 @@ import json
 import os
 import boto3
 import datetime
-from slack_sdk import WebClient
+from slack_bolt import App
+from slack_bolt.adapter.aws_lambda import SlackRequestHandler
 from slack_sdk.errors import SlackApiError
 from response.wrapper import success_response
 
 # Initialize AWS clients
 dynamodb = boto3.resource('dynamodb')
 bedrock_runtime = boto3.client('bedrock-runtime')
+
+# Initialize Slack Bolt app
+app = App(
+    process_before_response=True,
+    token=os.environ.get("SLACK_OAUTH_TOKEN")
+    , signing_secret=os.environ.get("SLACK_SIGNING_SECRET")
+)
 
 def create_roast_prompt(user_name, user_attributes, tickets):
     """
@@ -37,7 +45,7 @@ def create_roast_prompt(user_name, user_attributes, tickets):
 
     {attributes_text}
 
-    Haz broma ingeniosas de las descripciones de las tareas que se encuentran en:  
+    Haz broma ingeniosas de las descripciones de las tareas que se encuentran en:
 
     {tickets}
 
@@ -137,7 +145,7 @@ def obtainTicketsForUsersId(user_id, limit=10):
         # Prepare query parameters
         query_params = {
             'KeyConditionExpression': boto3.dynamodb.conditions.Key('user_id').eq(user_id)
-            & boto3.dynamodb.conditions.Key('sk').begins_with('#TICKET#'),
+                                      & boto3.dynamodb.conditions.Key('sk').begins_with('#TICKET#'),
             'Limit': limit  # Add limit to the query
         }
 
@@ -160,81 +168,44 @@ def obtainTicketsForUsersId(user_id, limit=10):
 
     return tickets
 
+@app.command("/roast")
+def handle_message_events(ack, command, client):
+    print("Receiving command:", command)
+    ack()
+    user_id = command['user_id']  # Get user ID from command
+    channel_id = command['channel_id'] # Get channel ID from command
+    # text = event.get('text', '') # You likely don't need this for a command
+    # Remove the if "roast me" block as the command itself is the trigger
 
-def hello(event, context):
-    # Extract user information from the event
-    user_id = None
     user_name = "User"
-    channel_id = None
-
-    # Parse the event body if it exists
-    if event.get('body'):
-        try:
-            # Check if the body is Base64 encoded
-            body = event['body']
-            if event.get('isBase64Encoded', False):
-                import base64
-                body = base64.b64decode(body).decode('utf-8')
-
-            # Try to parse as JSON first
-            try:
-                body_json = json.loads(body)
-                # Extract user_id from Slack event
-                if 'event' in body_json and 'user' in body_json['event']:
-                    user_id = body_json['event']['user']
-                    # Extract channel_id from Slack event
-                    if 'channel' in body_json['event']:
-                        channel_id = body_json['event']['channel']
-                elif 'user_id' in body_json:
-                    user_id = body_json['user_id']
-            except json.JSONDecodeError:
-                # If not JSON, try to parse as URL-encoded form data
-                import urllib.parse
-                form_data = dict(urllib.parse.parse_qsl(body))
-                if 'user_id' in form_data:
-                    user_id = form_data['user_id']
-                if 'user_name' in form_data:
-                    user_name = form_data['user_name']
-                if 'channel_id' in form_data:
-                    channel_id = form_data['channel_id']
-        except (KeyError, Exception) as e:
-            print(f"Error parsing event body: {e}")
-
-    # If we have a user_id, try to get the user's real name using Slack API
     slack_profile = {}
-    sayori_id = ""
+    sayori_id = user_id
 
-    if user_id:
-        # Get OAuth token from environment variable
-        slack_token = os.environ.get('SLACK_OAUTH_TOKEN')
-        if slack_token:
-            try:
-                client = WebClient(token=slack_token)
-                user_info = client.users_info(user=user_id)
-                print("User info response:", user_info)
-                sayori_id = user_info["user"]["id"]
-                if user_info['ok']:
-                    user_name = user_info['user']['real_name'] or user_info['user']['name']
+    try:
+        user_info = client.users_info(user=user_id)
+        print("User info response:", user_info)
+        sayori_id = user_info["user"]["id"]
+        if user_info['ok']:
+            user_name = user_info['user']['real_name'] or user_info['user']['name']
 
-                    # Extract profile attributes from Slack
-                    if 'user' in user_info and 'profile' in user_info['user']:
-                        profile = user_info['user']['profile']
-                        slack_profile = {
-                            'display_name': profile.get('display_name', ''),
-                            'status_text': profile.get('status_text', ''),
-                            'status_emoji': profile.get('status_emoji', ''),
-                            'title': profile.get('title', ''),
-                            'phone': profile.get('phone', ''),
-                            'email': profile.get('email', ''),
-                            'image_original': profile.get('image_original', ''),
-                            'image_72': profile.get('image_72', '')
-                        }
-            except SlackApiError as e:
-                print(f"Error fetching user info: {e}")
+            # Extract profile attributes from Slack
+            if 'user' in user_info and 'profile' in user_info['user']:
+                profile = user_info['user']['profile']
+                slack_profile = {
+                    'display_name': profile.get('display_name', ''),
+                    'status_text': profile.get('status_text', ''),
+                    'status_emoji': profile.get('status_emoji', ''),
+                    'title': profile.get('title', ''),
+                    'phone': profile.get('phone', ''),
+                    'email': profile.get('email', ''),
+                    'image_original': profile.get('image_original', ''),
+                    'image_72': profile.get('image_72', '')
+                }
+    except SlackApiError as e:
+        print(f"Error fetching user info: {e}")
 
     # Get user attributes from DynamoDB
     user_attributes = {}
-    # Initialize tickets variable
     tickets = "- No tickets available\n"
 
     try:
@@ -245,51 +216,48 @@ def hello(event, context):
         # Create a sort key with the user's name
         sk = f"#USER#{user_name}"
 
-        # Store user profile in DynamoDB
-        if user_id:
-            # First, try to get existing attributes
-            try:
-                response = table.get_item(
-                    Key={
-                        'user_id': user_id,
-                        'sk': sk
-                    }
-                )
+        # First, try to get existing attributes
+        try:
+            response = table.get_item(
+                Key={
+                    'user_id': user_id,
+                    'sk': sk
+                }
+            )
 
-                if 'Item' in response:
-                    user_attributes = response['Item'].get('attributes', {})
+            if 'Item' in response:
+                user_attributes = response['Item'].get('attributes', {})
 
-                # Get tickets from DynamoDB (limited to 10 for better performance)
-                tickets_list = obtainTicketsForUsersId(sayori_id, limit=10)
+            # Get tickets from DynamoDB (limited to 10 for better performance)
+            tickets_list = obtainTicketsForUsersId(sayori_id, limit=10)
 
-                # Format tickets for the prompt
-                tickets_text = ""
-                if tickets_list:
-                    for ticket in tickets_list:
-                        # Extract relevant ticket information
-                        ticket_id = ticket.get('sk', '').replace('#TICKET#', '')
+            # Format tickets for the prompt
+            tickets_text = ""
+            if tickets_list:
+                for ticket in tickets_list:
+                    # Extract relevant ticket information
+                    ticket_id = ticket.get('sk', '').replace('#TICKET#', '')
+                    ticket_comments = ticket.get('comments', 'No Comments')
+                    # Add formatted ticket to the text
+                    tickets_text += f"- Ticket {ticket_id}:\n  {ticket_comments}\n\n"
 
-                        ticket_comments = ticket.get('comments', 'No Comments')
-                        # Add formatted ticket to the text
-                        tickets_text += f"- Ticket {ticket_id}:\n  {ticket_comments}\n\n"
+            # Store formatted tickets text only if we have tickets
+            tickets = tickets_text
+        except Exception as e:
+            print(f"Error fetching user attributes from DynamoDB: {e}")
 
-                    # Store formatted tickets text only if we have tickets
-                    tickets = tickets_text
-            except Exception as e:
-                print(f"Error fetching user attributes from DynamoDB: {e}")
-
-            # Update or create the user profile in DynamoDB
-            try:
-                table.put_item(
-                    Item={
-                        'user_id': user_id,
-                        'sk': sk,
-                        'attributes': slack_profile,
-                        'updated_at': str(datetime.datetime.now())
-                    }
-                )
-            except Exception as e:
-                print(f"Error storing user profile in DynamoDB: {e}")
+        # Update or create the user profile in DynamoDB
+        try:
+            table.put_item(
+                Item={
+                    'user_id': user_id,
+                    'sk': sk,
+                    'attributes': slack_profile,
+                    'updated_at': str(datetime.datetime.now())
+                }
+            )
+        except Exception as e:
+            print(f"Error storing user profile in DynamoDB: {e}")
     except Exception as e:
         print(f"Error with DynamoDB operations: {e}")
 
@@ -315,24 +283,26 @@ def hello(event, context):
         message = f"Hey {user_name} {user_mention}, {roast}"
     else:
         message = f"Hey {user_name} {user_mention}, No pude crear una broma esta vez. Por favor, inténtalo de nuevo más tarde."
+
     # Reply to the Slack channel
-    if user_id and channel_id:
-        try:
-            # Send message to the channel
-            if channel_id and slack_token:
-                client = WebClient(token=slack_token)
-                response = client.chat_postMessage(
-                    channel=channel_id,
-                    text=message
-                )
-                print(f"Message sent to channel: {channel_id}")
-        except Exception as e:
-            print(f"Error sending message to Slack channel: {e}")
+    try:
+        # Send message to the channel
+        if channel_id:
+            client.chat_postMessage(
+                channel=channel_id,
+                text=message
+            )
+            print(f"Message sent to channel: {channel_id}")
+    except Exception as e:
+        print(f"Error sending message to Slack channel: {e}")
+# Lambda handler
+def lambda_handler(event, context):
+    slack_handler = SlackRequestHandler(app=app)
+    return slack_handler.handle(event, context)
 
-    # Create response with the message
-    body = {
-        "message": message,
-    }
+# The original hello function is no longer the main handler when using Slack Bolt
+# You can remove or comment it out
 
-    # Use the wrapper function to create a properly formatted response
-    return success_response(body)
+# def hello(event, context):
+#     # ... (original hello function code) ...
+#     pass

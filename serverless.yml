@@ -36,13 +36,14 @@ provider:
 
 functions:
   hello-function:
-    handler: lambdas/bot.hello
+    handler: lambdas/bot.lambda_handler
     timeout: 15
     name: ${self:service}-${opt:stage}-hello-from-slack
     layers:
       - Ref: PythonRequirementsLambdaLayer
     environment:
       SLACK_OAUTH_TOKEN: ${env:SLACK_OAUTH_TOKEN, ''}
+      SLACK_SIGNING_SECRET: ${env:SLACK_SIGNING_SECRET, ''}
       DYNAMODB_TABLE: ${self:stages.${opt:stage}.DYNAMODB_TABLE_USERS}
     events:
       - httpApi:
