@@ -55,6 +55,25 @@ functions:
       include:
         - lambdas/bot.py
         - response/wrapper.py
+  pic-function:
+    handler: lambdas/pic.lambda_handler
+    timeout: 15
+    name: ${self:service}-${opt:stage}-pic-from-slack
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+    environment:
+      SLACK_OAUTH_TOKEN: ${env:SLACK_OAUTH_TOKEN, ''}
+      SLACK_SIGNING_SECRET: ${env:SLACK_SIGNING_SECRET, ''}
+    events:
+      - httpApi:
+          path: /pic
+          method: post
+    package:
+      exclude:
+        - '**'
+      include:
+        - lambdas/pic.py
+        - response/wrapper.py
 
 resources:
   Resources:

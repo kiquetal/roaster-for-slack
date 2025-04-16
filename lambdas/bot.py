@@ -50,7 +50,7 @@ def create_roast_prompt(user_name, user_attributes, tickets):
     {tickets}
 
 
-    No superes mas de 200 palabras, utiliza lenguaje tecnico y sarcastico
+    No superes mas de 200 palabras, utiliza lenguaje tecnico y bromista sin maldad
     Agrega un emoji al final.
     """
 
@@ -77,8 +77,8 @@ def generate_roast(prompt):
         # Prepare the request body
         request_body = {
             "prompt": formatted_prompt,
-            "max_tokens_to_sample": 300,
-            "temperature": 0.7,
+            "max_tokens_to_sample": 150,
+            "temperature": 0.8,
             "top_p": 0.9,
         }
 
@@ -232,7 +232,7 @@ def handle_message_events(respond,body,client):
                 user_attributes = response['Item'].get('attributes', {})
 
             # Get tickets from DynamoDB (limited to 10 for better performance)
-            tickets_list = obtainTicketsForUsersId(sayori_id, limit=10)
+            tickets_list = obtainTicketsForUsersId(sayori_id, limit=4)
 
             # Format tickets for the prompt
             tickets_text = ""
