@@ -7,8 +7,8 @@ A serverless application that integrates Amazon Bedrock with Slack, allowing use
 This project enables users to invoke Amazon Bedrock AI models directly from a Slack channel. The application:
 
 1. Receives messages from a Slack bot
-2. Stores conversation context in DynamoDB
-3. Sends the context and user message to Amazon Bedrock
+2. Stores profile from slack in DynamoDB
+3. Generate some tickets and the use them to generate a roast
 4. Returns the AI response back to the Slack channel
 
 ## Architecture
@@ -26,12 +26,10 @@ The application is built using:
 ```
 roaster-for-slack/
 ├── lambdas/                # Lambda function implementations
-│   ├── __init__.py         # Makes the directory a Python package
-│   └── hello.py            # Example lambda function
+│   ├── bot.py              # Main roast generation function
+│   └── pic.py               # Generation of images with amazon bedrock
 ├── response/               # Response formatting utilities
-│   ├── __init__.py         # Makes the directory a Python package
 │   └── wrapper.py          # Response wrapper functions
-├── handler.py              # Main handler that routes to specific lambdas
 ├── serverless.yml          # Serverless Framework configuration
 └── README.md               # Project documentation
 ```
@@ -40,15 +38,13 @@ roaster-for-slack/
 
 The application uses a DynamoDB table to store conversation context with the following schema:
 
-| Attribute      | Type   | Description                                |
-|----------------|--------|--------------------------------------------|
-| user_id        | String | Primary key - Slack user ID                |
-| conversation_id| String | Sort key - Unique conversation identifier  |
-| messages       | List   | Array of previous messages in conversation |
-| timestamp      | Number | Last update timestamp                      |
-| metadata       | Map    | Additional user/conversation metadata      |
+| Attribute              | Type   | Description                  |
+|------------------------|--------|------------------------------|
+| user_id                | String | Primary key - Slack user ID  |
+| sk                     | String | Sort key - Ticket or profile |
+----------------------- |--------|--------------------------------
 
-## Setup and Deployment
+ 
 
 ### Prerequisites
 
@@ -63,6 +59,7 @@ The application uses a DynamoDB table to store conversation context with the fol
 2. Under "OAuth & Permissions", add the following scopes:
    - `users:read` - To fetch user information
    - `chat:write` - To send messages
+   - `files:write` - To upload files-images
    - `app_mentions:read` - To receive mention events
 3. Install the app to your workspace
 4. Copy the "Bot User OAuth Token" (starts with `xoxb-`) to use as your SLACK_OAUTH_TOKEN
