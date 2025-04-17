@@ -81,8 +81,8 @@ Python dependencies are managed in the `requirements.txt` file and include:
 
 1. Install Serverless Framework plugins:
    ```
-   npm install --save-dev serverless-layer-requirements
-   ```
+    serverless plugin install -n serverless-python-requirements
+    ```
 
 2. Update Python dependencies (if needed):
    ```
@@ -93,6 +93,8 @@ Python dependencies are managed in the `requirements.txt` file and include:
    ```
    # Set the environment variable for deployment
    export SLACK_OAUTH_TOKEN=xoxb-your-token-here
+   export SLACK_SIGNING_SECRET=your-signing-secret
+   
    ```
 
 4. Deploy to AWS:
