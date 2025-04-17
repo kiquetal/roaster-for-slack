@@ -13,6 +13,8 @@ from response.wrapper import success_response
 dynamodb = boto3.resource('dynamodb')
 bedrock_runtime = boto3.client('bedrock-runtime')
 
+
+
 # Initialize Slack Bolt app
 app = App(
     process_before_response=True,
