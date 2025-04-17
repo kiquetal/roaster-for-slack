@@ -70,11 +70,12 @@ The application uses a DynamoDB table to store conversation context with the fol
 ### Dependencies
 
 The project uses the following plugins:
-- **serverless-layer-requirements**: Automatically creates a Lambda layer from Python requirements.txt
+- **serverless-python-requirements**: Automatically creates a Lambda layer from Python requirements.txt
 
 Python dependencies are managed in the `requirements.txt` file and include:
 - boto3: AWS SDK for Python
 - slack_sdk: Slack API SDK for Python
+- slack_bolt: Slack app framework for Python
 
 ### Deployment
 
