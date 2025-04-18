@@ -44,7 +44,7 @@ The application uses a DynamoDB table to store conversation context with the fol
 | sk                     | String | Sort key - Ticket or profile |
 ----------------------- |--------|--------------------------------
 
- 
+
 
 ### Prerequisites
 
@@ -118,6 +118,16 @@ The bot uses Amazon Bedrock's Claude model to generate roasts. Claude has built-
 3. The friendly message is in Spanish to match the language of the roasts: "Lo siento, no puedo generar una broma que pueda resultar ofensiva. ¿Qué tal si intentamos algo diferente? 😊"
 
 This ensures a better user experience even when content moderation is triggered.
+
+
+## API Endpoints
+
+The following table shows the API endpoints and their corresponding Lambda functions:
+
+| API Path | Invoked Lambda |
+|----------|---------------|
+| /        | lambdas/bot.lambda_handler |
+| /pic     | lambdas/pic.lambda_handler |
 
 ## License
 
