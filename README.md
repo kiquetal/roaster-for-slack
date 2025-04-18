@@ -2,6 +2,21 @@
 
 A serverless application that integrates Amazon Bedrock with Slack, allowing users to interact with AI models through a Slack bot.
 
+## Table of Contents
+- [Project Overview](#project-overview)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [DynamoDB Schema](#dynamodb-schema)
+  - [Data Collected from Slack](#data-collected-from-slack)
+- [Prerequisites](#prerequisites)
+- [Slack Bot Setup](#slack-bot-setup)
+- [Dependencies](#dependencies)
+- [Deployment](#deployment)
+- [Development](#development)
+- [Content Moderation](#content-moderation)
+- [API Endpoints](#api-endpoints)
+- [License](#license)
+
 ## Project Overview
 
 This project enables users to invoke Amazon Bedrock AI models directly from a Slack channel. The application:
@@ -44,7 +59,46 @@ The application uses a DynamoDB table to store conversation context with the fol
 | sk                     | String | Sort key - Ticket or profile |
 ----------------------- |--------|--------------------------------
 
+### Data Collected from Slack
 
+When a user interacts with the bot, the following data is collected from Slack and stored in DynamoDB:
+
+1. **User Profile Information**:
+   - `display_name`: User's display name in Slack
+   - `status_text`: User's current status message
+   - `status_emoji`: User's current status emoji
+   - `title`: User's job title or role
+   - `phone`: User's phone number (if available in Slack profile)
+   - `email`: User's email address (if available in Slack profile)
+   - `image_original`: URL to user's profile image (original size)
+   - `image_72`: URL to user's profile image (72x72 px)
+
+2. **Record Structure**:
+   - For user profiles:
+     ```
+     {
+       'user_id': '<Slack user ID>',
+       'sk': '#USER#<user_name>',
+       'attributes': {<Slack profile data>},
+       'updated_at': '<timestamp>'
+     }
+     ```
+   
+   - For tickets:
+     ```
+     {
+       'user_id': '<Slack user ID>',
+       'sk': '#TICKET#<ticket_id>',
+       'comments': '<ticket content>'
+     }
+     ```
+
+3. **Data Usage**:
+   - User profile data is used to personalize roasts
+   - Ticket information (up to 4 recent tickets) is used to generate context-aware roasts
+   - All data is stored with the user's Slack ID as the primary key for efficient retrieval
+
+This data collection is designed to enhance the user experience by creating personalized roasts based on both profile information and recent tasks/tickets.
 
 ### Prerequisites
 
@@ -132,3 +186,5 @@ The following table shows the API endpoints and their corresponding Lambda funct
 ## License
 
 [License information]
+
+`
