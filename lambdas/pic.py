@@ -62,6 +62,12 @@ def handle_message_events(respond,body,client):
     channel_id = body['channel_id'] # Get channel ID from command
     text = body['text']  # Get text from command
 
+    user_info = client.users_info(user=user_id)
+    print("User info response:", user_info)
+    sayori_id = user_info["user"]["id"]
+    if user_info['ok']:
+        user_name = user_info['user']['real_name'] or user_info['user']['name']
+    mentioned_user = f"<@{user_id}>"
     # Check and enforce daily limit
     if not check_and_increment_user_pic_count(user_id):
         client.chat_postMessage(
@@ -109,7 +115,7 @@ def handle_message_events(respond,body,client):
         image_bytes = base64.b64decode(base64_bytes)
         client.files_upload_v2(
             channel=channel_id,
-            initial_comment=f"Here's the image I generated for you!",
+            initial_comment=f"Here's the image I generated for you! Enjoy! {mentioned_user}",
            file=io.BytesIO(image_bytes),
 
         )
