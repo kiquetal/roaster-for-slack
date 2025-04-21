@@ -6,6 +6,7 @@ service: roaster-for-slack
 stages:
   test:
     DYNAMODB_TABLE_USERS: ${self:service}-${opt:stage}-users
+    DYNAMODB_TABLE_COUNTER: ${self:service}-${opt:stage}-counter
 
 package:
   individually: true
@@ -17,6 +18,7 @@ provider:
   runtime: python3.10
   stage: ${opt:stage, 'test'}
   profile: ${opt:aws-profile, 'default'}
+  logRetentionInDays: 7
   iam:
     role:
       statements:
@@ -33,7 +35,15 @@ provider:
           Action:
             - bedrock:InvokeModel
           Resource: "*"
-
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource: !GetAtt CounterTable.Arn
 functions:
   hello-function:
     handler: lambdas/bot.lambda_handler
@@ -64,6 +74,7 @@ functions:
     environment:
       SLACK_OAUTH_TOKEN: ${env:SLACK_OAUTH_TOKEN, ''}
       SLACK_SIGNING_SECRET: ${env:SLACK_SIGNING_SECRET, ''}
+      DYNAMODB_TABLE_COUNTER: ${self:stages.${opt:stage}.DYNAMODB_TABLE_COUNTER}
     events:
       - httpApi:
           path: /pic
@@ -99,6 +110,21 @@ resources:
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
+    CounterTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:stages.${opt:stage}.DYNAMODB_TABLE_COUNTER}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: user_id
+            AttributeType: S
+          - AttributeName: date
+            AttributeType: S
+        KeySchema:
+          - AttributeName: user_id
+            KeyType: HASH
+          - AttributeName: date
+            KeyType: RANGE
 
 plugins:
   - serverless-python-requirements
