@@ -2,6 +2,9 @@ import base64
 import io
 import json
 import os
+import random
+from base64 import b64decode
+
 import boto3
 import datetime
 
@@ -85,21 +88,11 @@ def handle_message_events(respond,body,client):
 
     try:
         # 1. Construct the Bedrock Request Body
-        bedrock_model_id = "stability.stable-diffusion-xl-v1" # Example model ID
-        request_body = json.dumps({
-
-            "text_prompts": [
-                {
-                    "text": text,
-                    "weight": 1.0 # Optional, but good practice
-                }
-            ],
-        })
-
+        model, body = generate_body_for_titan_v2(text)
         # 2. Invoke the Bedrock Model
         response = bedrock_runtime.invoke_model(
-            body=request_body,
-            modelId=bedrock_model_id,
+            body=body,
+            modelId=model,
             accept = "application/json",
             contentType="application/json"
         )
@@ -108,16 +101,21 @@ def handle_message_events(respond,body,client):
         print("response from bedrock")
         print(response)
         response_body = json.loads(response.get("body").read())
-        print(response_body['result'])
+        model = os.environ.get("MODEL_BEDROCK")
+        print(f"The model used is: {model}")
+        if model == "stable-diffusion":
+            print(response_body['result'])
+            base64_image = response_body.get("artifacts")[0].get("base64")
+            base64_bytes = base64_image.encode('ascii')
+            image_bytes = base64.b64decode(base64_bytes)
+        else:
+            base64_images = response_body["images"][0]
+            image_bytes = b64decode(base64_images)
 
-        base64_image = response_body.get("artifacts")[0].get("base64")
-        base64_bytes = base64_image.encode('ascii')
-        image_bytes = base64.b64decode(base64_bytes)
         client.files_upload_v2(
             channel=channel_id,
             initial_comment=f"Here's the image I generated for you! Enjoy! {mentioned_user}",
-           file=io.BytesIO(image_bytes),
-
+            file=io.BytesIO(image_bytes),
         )
         print(f"Image generated and sent to channel: {channel_id}")
 
@@ -138,3 +136,52 @@ def lambda_handler(event, context):
 # def hello(event, context):
 #     # ... (original hello function code) ...
 #     pass
+
+def generate_body_for_stable_diffussion(text):
+    try:
+        bedrock_model_id = "stability.stable-diffusion-xl-v1" # Example model ID
+        request_body = json.dumps({
+
+            "text_prompts": [
+                {
+                    "text": text,
+                    "weight": 1.0 # Optional, but good practice
+                }
+            ],
+        })
+
+        return bedrock_model_id, request_body
+
+    except Exception as e:
+        print(f"Error generating body for Stable Diffusion: {e}")
+        return None
+
+def generate_body_for_titan_v2(text):
+    try:
+        # Set the model ID, e.g., Titan Image Generator G1.
+        model_id = "amazon.titan-image-generator-v2:0"
+
+
+        # Generate a random seed.
+        seed = random.randint(0, 2147483647)
+
+        # Format the request payload using the model's native structure.
+        native_request = {
+            "taskType": "TEXT_IMAGE",
+            "textToImageParams": {"text": text},
+            "imageGenerationConfig": {
+                "numberOfImages": 1,
+                "quality": "standard",
+                "cfgScale": 8.0,
+                "height": 512,
+                "width": 512,
+                "seed": seed,
+            },
+        }
+
+        # Convert the native request to JSON.
+        request = json.dumps(native_request)
+        return model_id, request
+    except Exception as e:
+        print(f"Error generating body for Titan V2: {e}")
+        return None

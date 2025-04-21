@@ -75,6 +75,7 @@ functions:
       SLACK_OAUTH_TOKEN: ${env:SLACK_OAUTH_TOKEN, ''}
       SLACK_SIGNING_SECRET: ${env:SLACK_SIGNING_SECRET, ''}
       DYNAMODB_TABLE_COUNTER: ${self:stages.${opt:stage}.DYNAMODB_TABLE_COUNTER}
+      MODEL_BEDROCK: titan
     events:
       - httpApi:
           path: /pic
